@@ -1,0 +1,611 @@
+1,概述
+开源框架
+HTTP实现替换HttpClient为UrlConnection, 自动解析回调泛型, 更安全的断点续传策略；
+事件注解去除不常用的功能, 提高性能；
+数据库api简化提高性能, 达到和greenDao一致的性能；
+图片绑定支持gif, webp; 支持圆角, 圆形, 方形等裁剪, 支持自动旋转。
+参考文献
+Github下载：https://github.com/wyouflf/xUtils3
+JCenter下载：http://jcenter.bintray.com/org/xutils/xutils/
+Maven下载1：http://central.maven.org/maven2/org/xutils/xutils/
+Maven下载2：http://repo1.maven.org/maven2/org/xutils/xutils/
+https://blog.csdn.net/tyk9999tyk/article/details/53306035
+
+2,使用配置
+使用Gradle构建时,model添加依赖
+```
+implementation 'org.xutils:xutils:3.5.0'
+```
+加入权限
+```
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+```
+创建Application
+```
+public class MyAppliaction extends Application {
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // 在application的onCreate中初始化
+        initXutils();
+    }
+
+    private void initXutils() {
+        x.Ext.init(this);
+        // 是否输出debug日志, 开启debug会影响性能.
+        x.Ext.setDebug(BuildConfig.DEBUG);
+         
+    }
+}
+```
+配置Application,name属性:
+```
+<application
+        android:name=".MyAppliaction"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+</application>
+```
+3,xUtils3注解模块的使用
+注解布局
+@ContentView(R.layout.activity_main)
+Activity中代替setContentView(R.layout.activity_main);
+```
+@ContentView(R.layout.activity_main)
+public class MainActivity extends AppCompatActivity {
+	@Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        x.view().inject(this);
+    }
+}
+
+```
+Fragment中注解布局
+```
+@ContentView(R.layout.fragment_contet)
+public class MyFragment extends Fragment {
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        //参数1:Fragment,参数2:LayoutInflater,参数3:ViewGroup
+        //inject(Object fragment, LayoutInflater inflater, ViewGroup container)
+        return x.view().inject(this, inflater, container);
+    }
+}
+```
+注解控件代替findviedbyid
+@ViewInject
+```
+@ViewInject(R.id.tv_frag)
+TextView textView;
+```
+注解事件
+@Event
+注解点击事件
+1,方法私有2,事件类型对应3,指定id
+```
+@Event(type = View.OnClickListener.class, value = {R.id.btn})
+private void test(View view) {
+//        Toast.makeText(this, "按钮被点击了!", Toast.LENGTH_SHORT).show();
+}
+```
+注解长按事件
+```
+@Event(type = View.OnLongClickListener.class, value = R.id.btn)
+private boolean testOnLongClickListener(View v) {
+    Toast.makeText(this, "按钮被长按了!", Toast.LENGTH_SHORT).show();
+    return true;
+}
+```
+xUtils3网络模块的使用
+xUtils3网络模块大大方便了在实际开发中网络模块的开发，xUtils3网络模块大致包括GET请求、POST请求、如何使用其他请求方式、上传文件、下载文件、使用缓存等功能，下面将做一一说明：
+GET请求
+```
+//1,封装请求参数,
+//http://litchiapi.jstv.com/api/GetFeeds?column=4&PageSize=20&pageIndex=1&val=100511D3BE5301280E0992C73A9DEC41
+//column=4&PageSize=20&pageIndex=1&val=100511D3BE5301280E0992C73A9DEC41
+String url = "http://litchiapi.jstv.com/api/GetFeeds?";
+RequestParams requestParams = new RequestParams(url);
+//2,添加参数
+requestParams.addParameter("column", "4");
+requestParams.addParameter("PageSize", "20");
+requestParams.addParameter("pageIndex", "1");
+requestParams.addParameter("val", "100511D3BE5301280E0992C73A9DEC41");
+//3,发送网络请求
+x.http().get(requestParams, new Callback.CommonCallback<String>() {
+    @Override
+    public void onSuccess(String result) {
+        //请求成功回调
+        Log.i(tag, "onSuccess: ");
+        Log.i(tag, result);
+    }
+
+    @Override
+    public void onError(Throwable ex, boolean isOnCallback) {
+        //请求失败回调
+        Log.i(tag, "onError: ");
+    }
+
+    @Override
+    public void onCancelled(CancelledException cex) {
+        //请求取消回调
+        Log.i(tag, "onCancelled: ");
+    }
+
+    @Override
+    public void onFinished() {
+        //任务完成
+        Log.i(tag, "onFinished: ");
+    }
+});
+```
+带有缓存的GET请求：
+```
+        String url = "http://litchiapi.jstv.com/api/GetFeeds?";
+        RequestParams requestParams = new RequestParams(url);
+        //2,添加参数
+        requestParams.addParameter("column", "4");
+        requestParams.addParameter("PageSize", "20");
+        requestParams.addParameter("pageIndex", "1");
+        requestParams.addParameter("val", "100511D3BE5301280E0992C73A9DEC41");
+// 默认缓存存活时间, 单位:毫秒（如果服务器没有返回有效的max-age或Expires则参考）
+        requestParams.setCacheMaxAge(1000 * 60);
+
+        x.http().get(requestParams, new Callback.CacheCallback<String>() {
+            private boolean hasError = false;
+            private String result = null;
+            @Override
+            public boolean onCache(String result) {
+                //得到缓存数据, 缓存过期后不会进入
+                this.result = result;
+                Log.i(TAG, "onCache");
+                Log.i(TAG, result);
+                //true: 信任缓存数据, 不再发起网络请求; false不信任缓存数据
+                return true;
+            }
+            @Override
+            public void onSuccess(String result) {
+                //如果服务返回304或onCache选择了信任缓存,这时result为null
+                Log.i("JAVA", "开始请求");
+                if (result != null) {
+                    this.result = result;
+                    Log.i(TAG, "onSuccess");
+                    Log.i(tag, result);
+                }
+            }
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+                hasError = true;
+                Toast.makeText(x.app(), ex.getMessage(), Toast.LENGTH_LONG).show();
+                if (ex instanceof HttpException) { //网络错误
+                    HttpException httpEx = (HttpException) ex;
+                    int responseCode = httpEx.getCode();
+                    String responseMsg = httpEx.getMessage();
+                    String errorResult = httpEx.getResult();
+                    //...
+                } else { //其他错误
+                    //...
+                }
+            }
+            @Override
+            public void onCancelled(CancelledException cex) {
+
+            }
+            @Override
+            public void onFinished() {
+                if (!hasError && result != null) {
+                    //成功获取数据
+                    Toast.makeText(x.app(), result, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+```
+上面onCache方法中需要注意的几点： 
+a）如果服务端没有返回过期时间，参考params.setCacheMaxAge(maxAge)方法。 
+b）客户端会根据服务端返回的header中max-age或expires来确定本地缓存是否给onCache方法。如果服务端没有返回max-age或expires，那么缓存将一直保存，除非这里自己定义了返回false，那么xUtils将请求新数据, 来覆盖它。
+c）如果信任该缓存返回true，将不再请求网络。返回false继续请求网络，但会在请求头中加上ETag,Last-Modified等信息。如果服务端返回304，则表示数据没有更新，不继续加载数据。
+POST请求
+```
+        String url = "http://litchiapi.jstv.com/api/GetFeeds?";
+        //        String baseUrl = "http://v5.pc.duomi.com/search-ajaxsearch-searchall?kw=liedehua&pi=1&pz=10";
+//        String baseUrl = "http://v5.pc.duomi.com/search-ajaxsearch-searchall?";
+        RequestParams requestParams = new RequestParams(url);
+//        params.addHeader("head","android"); //为当前请求添加一个头
+//        requestParams.addBodyParameter("kw", "liedehua");
+//        requestParams.addBodyParameter("pi", "1");
+//        requestParams.addBodyParameter("pz", "15");
+        requestParams.addBodyParameter("column", "4");
+        requestParams.addBodyParameter("PageSize", "20");
+        requestParams.addBodyParameter("pageIndex", "1");
+        requestParams.addBodyParameter("val", "100511D3BE5301280E0992C73A9DEC41");
+        x.http().post(requestParams, new Callback.CommonCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                //解析result
+                Log.i(TAG, "onSuccess: ");
+                Log.i(TAG, result);
+            }
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+                Log.i(TAG, "onError: ");
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+            }
+            @Override
+            public void onFinished() {
+                Log.i(TAG, "onFinished: ");
+            }
+        });
+```
+上传文件
+```
+        String url = "http://169.254.38.24/MyUploadServer/servlet/MyUploadServlet";
+        Toast.makeText(this, url, Toast.LENGTH_SHORT).show();
+        String path1 = "/mnt/sdcard/1.jpg";
+        String path2 = "/mnt/sdcard/2.jpg";
+        //创建请求参数
+        RequestParams params = new RequestParams(url);
+        params.setMultipart(true);
+        params.addBodyParameter("file", new File(path1));
+        params.addBodyParameter("file", new File(path2));
+        params.addBodyParameter("name", "zhang101");
+        x.http().post(params, new Callback.CommonCallback<String>() {
+            @Override
+            public void onSuccess(String result) {
+                Toast.makeText(MainActivity.this, result, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+            }
+
+            @Override
+            public void onFinished() {
+            }
+        });
+```
+下载文件
+```
+        String url = "http://169.254.38.24/app2.0.apk";
+        RequestParams params = new RequestParams(url);
+        //自定义保存路径，Environment.getExternalStorageDirectory()：SD卡的根目录
+        params.setSaveFilePath(Environment.getExternalStorageDirectory() + "/myapp/");
+        //自动为文件命名
+        params.setAutoRename(true);
+        x.http().post(params, new Callback.ProgressCallback<File>() {
+            @Override
+            public void onSuccess(File result) {
+                //apk下载完成后，调用系统的安装方法
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(Uri.fromFile(result), "application/vnd.android.package-archive");
+                startActivity(intent);
+            }
+
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+            }
+
+            @Override
+            public void onFinished() {
+            }
+
+            //网络请求之前回调
+            @Override
+            public void onWaiting() {
+            }
+
+            //网络请求开始的时候回调
+            @Override
+            public void onStarted() {
+            }
+
+            //下载的时候不断回调的方法
+            @Override
+            public void onLoading(long total, long current, boolean isDownloading) {
+                //当前进度和文件总大小
+                Log.i("JAVA", "current：" + current + "，total：" + total);
+            }
+        });
+```
+xUtils3图片模块的使用
+加载处理图片的方法:
+```
+	直接加载
+    void bind(ImageView view, String url);
+	配置图片参数
+    void bind(ImageView view, String url, ImageOptions options);
+	加载图片设置回调
+    void bind(ImageView view, String url, Callback.CommonCallback<Drawable> callback);
+	加载图片设置回调,设置图片参数
+    void bind(ImageView view, String url, ImageOptions options, Callback.CommonCallback<Drawable> callback);
+	loadDrawable加载图片
+    Callback.Cancelable loadDrawable(String url, ImageOptions options, Callback.CommonCallback<Drawable> callback);
+	loadFile加载图片
+    Callback.Cancelable loadFile(String url, ImageOptions options, Callback.CacheCallback<File> callback);
+```
+
+xUtils3 ImageOptions：
+```
+        //通过ImageOptions.Builder().set方法设置图片的属性
+
+        ImageOptions.Builder builder = new ImageOptions.Builder();
+        builder.setRadius(20);//设置拐角弧度
+        imageOptions = builder
+                .setFadeIn(true)//淡入效果
+//                .setCircular(true) //设置图片显示为圆形
+                .setSquare(true) //设置图片显示为正方形
+//                .setCrop(true).setSize(200, 200) //设置大小
+//                .setAnimation(animation) //设置动画
+//                .setFailureDrawable(Drawable failureDrawable) //设置加载失败的动画
+//                .setFailureDrawableId(R.mipmap.ic_launcher_round) //以资源id设置加载失败的动画
+//                    .setLoadingDrawable(Drawable loadingDrawable) //设置加载中的动画
+//                    .setLoadingDrawableId( int loadingDrawable) //以资源id设置加载中的动画
+                .setIgnoreGif(false) //忽略Gif图片
+//                .setParamsBuilder(ParamsBuilder paramsBuilder) //在网络请求中添加一些参数
+                .setUseMemCache(true) //设置使用MemCache，默认true
+                .build();//生成ImageOptions
+```
+xUtils3 bind方法加载网络图片
+
+```
+        x.image().bind(holder.imageView, url, imageOptions, new Callback.CommonCallback<Drawable>() {
+            @Override
+            public void onSuccess(Drawable result) {
+            }
+
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+            }
+
+            @Override
+            public void onFinished() {
+            }
+        });
+```
+xUtils3 loadDrawable方法加载网络图片
+```
+        x.image().loadDrawable(url, imageOptions, new Callback.CommonCallback<Drawable>() {
+            @Override
+            public void onSuccess(Drawable result) {
+                holder.imageView.setImageDrawable(result);
+            }
+
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+            }
+
+            @Override
+            public void onFinished() {
+            }
+        });
+```
+xUtils3 loadFile方法加载网络图片
+```
+        x.image().loadFile(url, imageOptions, new Callback.CacheCallback<File>() {
+            @Override
+            public boolean onCache(File result) {
+                //在这里可以做图片另存为等操作
+                Log.i("JAVA", "file：" + result.getPath() + result.getName());
+                holder.imageView.setImageURI(Uri.fromFile(result));
+                return true; //相信本地缓存返回true
+            }
+
+            @Override
+            public void onSuccess(File result) {
+                Log.i(TAG, "onSuccess: ".concat(result.getAbsolutePath()));
+                holder.imageView.setImageURI(Uri.fromFile(result));
+            }
+
+            @Override
+            public void onError(Throwable ex, boolean isOnCallback) {
+            }
+
+            @Override
+            public void onCancelled(CancelledException cex) {
+            }
+
+            @Override
+            public void onFinished() {
+            }
+        });
+```
+xUtils3数据库模块的使用
+Application中进行初始化配置DaoConfig
+```
+        //初始化数据
+        DbManager.DaoConfig daoConfig = new DbManager.DaoConfig()
+                //设置数据库名，默认xutils.db
+                .setDbName("news.db")
+                //设置数据库路径，默认存储在app的私有目录
+                .setDbDir(new File("/mnt/sdcard/"))
+                //设置数据库的版本号
+                .setDbVersion(1)
+                //设置数据库打开的监听
+                .setDbOpenListener(new DbManager.DbOpenListener() {
+                    @Override
+                    public void onDbOpened(DbManager db) {
+                        //开启数据库支持多线程操作，提升性能，对写入加速提升巨大
+                        db.getDatabase().enableWriteAheadLogging();
+                    }
+                })
+                //设置数据库更新的监听
+                .setDbUpgradeListener(new DbManager.DbUpgradeListener() {
+                    @Override
+                    public void onUpgrade(DbManager db, int oldVersion, int newVersion) {
+                        //数据库更新的操作.
+                    }
+                })
+                //设置表创建的监听
+                .setTableCreateListener(new DbManager.TableCreateListener() {
+                    @Override
+                    public void onTableCreated(DbManager db, TableEntity<?> table){
+                        Log.i("JAVA", "onTableCreated：" + table.getName());
+                    }
+                });
+        //设置是否允许事务，默认true
+        //.setAllowTransaction(true)
+        db = x.getDb(daoConfig);
+```
+然后创建数据库表的实体类
+```
+//@Table注解,对象和数据库发生关联.
+//name指定表的名称
+//onCreated = "sql"：当第一次创建表需要插入数据时候在此写sql语句
+@Table(name = "tb_news",onCreated = "")
+public class NewsEntity {
+
+    /**
+     * name = "id"：数据库表中的一个字段
+     * isId = true：是否是主键
+     * autoGen = true：是否自动增长
+     * property = "NOT NULL"：添加约束
+     */
+    @Column(name = "id",isId = true,autoGen = true,property = "NOT NULL")
+    private int id;
+    @Column(name = "subject")
+    private String subject;
+    // @Column指定数据库中表字段相关属性,
+    @Column(name = "summary")
+    private String summary;
+    @Column(name = "cover")
+    private String cover;
+
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public void setSubject(String subject) {
+        this.subject = subject;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    public void setSummary(String summary) {
+        this.summary = summary;
+    }
+
+    public String getCover() {
+        return cover;
+    }
+
+    public void setCover(String cover) {
+        this.cover = cover;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+}
+```
+新增数据
+```
+                ArrayList<NewsEntity> list = new ArrayList<>();
+                for (int i = 0; i < feedsBeanList.size(); i++) {
+                    NewsInfo.ParamzBean.FeedsBean.DataBean data = feedsBeanList.get(i).getData();
+                    NewsEntity entity = new NewsEntity();
+                    entity.setSubject(data.getSubject());
+                    entity.setCover(data.getCover());
+                    entity.setSummary(data.getSummary());
+                    list.add(entity);
+                }
+                //保存一个集合的数据.save()方法不仅可以插入单个对象，还能插入集合
+                db.save(list);
+```
+删除数据库
+```
+db.dropDb();
+```
+删除表
+```
+db.dropTable(ChildInfo.class);
+```
+新增表中的数据
+```
+ChildInfo childInfo = new ChildInfo("zhangsan123");
+db.save(childInfo);
+```
+删除表中的数据
+```
+//第一种写法：
+db.delete(ChildInfo.class); //child_info表中数据将被全部删除
+//第二种写法，添加删除条件：
+WhereBuilder b = WhereBuilder.b();
+b.and("id",">",2); //构造修改的条件
+b.and("id","<",4);
+db.delete(ChildInfo.class, b);
+//第3种写法，删除指定的数据
+delete(object)
+```
+修改表中的数据
+```
+//第一种写法：
+ChildInfo first = db.findFirst(ChildInfo.class);
+first.setcName("zhansan2");
+db.update(first,"c_name"); //c_name：表中的字段名
+//第二种写法：
+WhereBuilder b = WhereBuilder.b();
+b.and("id","=",first.getId()); //构造修改的条件
+KeyValue name = new KeyValue("c_name","zhansan3");
+db.update(ChildInfo.class,b,name);
+//第三种写法：
+first.setcName("zhansan4");
+db.saveOrUpdate(first);
+```
+查询表中的数据
+```
+//查询数据库表中第一条数据
+ChildInfo first = db.findFirst(ChildInfo.class);
+Log.i("JAVA",first.toString());
+//添加查询条件进行查询
+List<ChildInfo> all = db.selector(ChildInfo.class).where("id",">",2).and("id","<",4).findAll();
+for(ChildInfo childInfo :all){
+    Log.i("JAVA",childInfo.toString());
+}
+```
+RecyclerView使用上下文菜单
+1.在ViewHolder中添加itemView.setOnCreateContextMenuListener(this);
+2.在ViewHolder中重写onCreateContextMenu添加菜单
+3.在adapter中定义一个属性mPosition记录当前长按点击的位置
+4.在onBindViewHolder中为itemView设置onLongClick事件
+holder.itemView.setOnLongClickListener(new View.OnLongClickListener() { 
+@Override 
+public boolean onLongClick(View v) { 
+mPosition = holder.getAdapterPosition(); 
+return false; 
+} 
+});
+5.在Activity中重写onContextItemSelected方法实现上下文点击的操作。
+
+
+
